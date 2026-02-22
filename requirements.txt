@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+sqlalchemy
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==3.2.0
+scipy
+implicit
+numpy
+pandas

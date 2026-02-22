@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ artist.name }}{% endblock %}
+{% block hero %}
+<div class="hero">
+    <div class="container">
+        <div class="d-flex align-items-center">
+            <img src="https://ui-avatars.com/api/?name={{ artist.name }}&size=80&background=random&length=1" class="rounded-circle me-4" style="width: 80px; height: 80px;">
+            <div>
+                <h1 class="display-4 mb-0">{{ artist.name }}</h1>
+                <div class="mt-2">
+                    {% if artist.country %}<span class="badge bg-light text-dark me-2"><i class="fas fa-globe me-1"></i>{{ artist.country }}</span>{% endif %}
+                    {% if artist.formed_year %}<span class="badge bg-light text-dark me-2"><i class="fas fa-calendar me-1"></i>{{ artist.formed_year }}</span>{% endif %}
+                    {% if artist.genres %}<span class="badge bg-light text-dark"><i class="fas fa-tag me-1"></i>{{ artist.genres }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block content %}
+{% if artist.bio %}
+<div class="card mb-4">
+    <div class="card-body">
+        <p class="lead">{{ artist.bio }}</p>
+    </div>
+</div>
+{% endif %}
+
+<h3 class="mb-4"><i class="fas fa-music me-2"></i>Треки</h3>
+<div class="row">
+    {% for track in tracks %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card track-card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <img src="https://ui-avatars.com/api/?name={{ artist.name }}&size=40&background=random&length=1" class="artist-avatar me-2">
+                    <div class="flex-grow-1">
+                        <h5 class="card-title mb-0">{{ track.title }}</h5>
+                        <p class="text-muted mb-0">{{ artist.name }}</p>
+                    </div>
+                    {% if user %}
+                        {% if track.id in liked_ids %}
+                            <i class="fas fa-heart liked fa-2x like-button" id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
+                        {% else %}
+                            <i class="far fa-heart fa-2x like-button" id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <p class="card-text">
+                    <span class="badge bg-info me-1">{{ track.genre }}</span>
+                    <span class="badge bg-secondary">{{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}</span>
+                </p>
+                <button class="btn btn-primary w-100" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ artist.name }}', '{{ artist.name }}')">
+                    <i class="fas fa-play me-2"></i>Слушать
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
