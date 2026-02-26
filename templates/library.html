@@ -38,7 +38,7 @@
                     <span class="badge bg-info me-1">{{ track.genre }}</span>
                     <span class="badge bg-secondary">{{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}</span>
                 </p>
-                <button class="btn btn-primary w-100" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ track.artist.name if track.artist else '' }}', '{{ track.artist.name if track.artist else '' }}')">
+                <button class="btn btn-primary w-100 py-2" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ track.artist.name if track.artist else '' }}', '{{ track.artist.name if track.artist else '' }}')">
                     <i class="fas fa-play me-2"></i>Слушать
                 </button>
             </div>

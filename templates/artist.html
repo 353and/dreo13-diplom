@@ -3,8 +3,8 @@
 {% block hero %}
 <div class="hero">
     <div class="container">
-        <div class="d-flex align-items-center">
-            <img src="https://ui-avatars.com/api/?name={{ artist.name }}&size=80&background=random&length=1" class="rounded-circle me-4" style="width: 80px; height: 80px;">
+        <div class="d-flex align-items-center flex-wrap">
+            <img src="https://ui-avatars.com/api/?name={{ artist.name }}&size=80&background=random&length=1" class="rounded-circle me-4 mb-2" style="width: 80px; height: 80px;">
             <div>
                 <h1 class="display-4 mb-0">{{ artist.name }}</h1>
                 <div class="mt-2">
@@ -33,7 +33,7 @@
         <div class="card track-card h-100">
             <div class="card-body">
                 <div class="d-flex align-items-center mb-3">
-                    <img src="https://ui-avatars.com/api/?name={{ artist.name }}&size=40&background=random&length=1" class="artist-avatar me-2">
+                    <img src="https://ui-avatars.com/api/?name={{ artist.name }}&size=40&background=random&length=1" class="artist-avatar me-2" alt="{{ artist.name }}">
                     <div class="flex-grow-1">
                         <h5 class="card-title mb-0">{{ track.title }}</h5>
                         <p class="text-muted mb-0">{{ artist.name }}</p>
@@ -50,7 +50,7 @@
                     <span class="badge bg-info me-1">{{ track.genre }}</span>
                     <span class="badge bg-secondary">{{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}</span>
                 </p>
-                <button class="btn btn-primary w-100" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ artist.name }}', '{{ artist.name }}')">
+                <button class="btn btn-primary w-100 py-2" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ artist.name }}', '{{ artist.name }}')">
                     <i class="fas fa-play me-2"></i>Слушать
                 </button>
             </div>
