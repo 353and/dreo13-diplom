@@ -1,4 +1,3 @@
-# database.py
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, DateTime, Index, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -13,7 +12,6 @@ engine = create_engine(
     echo=False
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
 class Artist(Base):
@@ -93,7 +91,6 @@ class PlaylistTrack(Base):
     playlist = relationship("Playlist", back_populates="tracks")
     track = relationship("Track", back_populates="playlist_tracks")
 
-# Индексы
 Index('idx_interactions_user', Interaction.user_id)
 Index('idx_interactions_track', Interaction.track_id)
 Index('idx_tracks_artist', Track.artist_id)

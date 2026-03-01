@@ -3,15 +3,12 @@ __pycache__/
 *.py[cod]
 *.so
 .Python
-env/
 venv/
+env/
 ENV/
-env.bak/
-venv.bak/
 *.egg-info/
 dist/
 build/
-*.egg
 
 # База данных и модели
 *.db
@@ -31,7 +28,7 @@ build/
 # Кэш аудио
 static/audio_cache/
 
-# Файлы конфигурации окружения
+# Файлы окружения
 .env
 .venv
 environment.yml
@@ -46,7 +43,7 @@ pip-delete-this-directory.txt
 .classpath
 .metadata
 
-# OS generated files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -54,11 +51,3 @@ pip-delete-this-directory.txt
 .Trashes
 ehthumbs.db
 Thumbs.db
-*.icloud
-
-# Тестовые и временные файлы
-test_*.py
-temp_*.py
-debug_*.py
-cookies.txt
-generate_*.py

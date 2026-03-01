@@ -1,24 +1,21 @@
 # api.py
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Response
 from sqlalchemy.orm import Session
-from typing import List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import timedelta
 import pickle
 import numpy as np
-from scipy.sparse import load_npz
+from scipy.sparse import load_npz, csr_matrix
 
-from database import get_db, SessionLocal
+from database import get_db
 from database import Artist, Track, User, Interaction, Playlist, PlaylistTrack
-from main import get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY, ALGORITHM
-from main import als_model, user_map, track_map, idx_to_track, user_item_matrix, load_model
+# Импортируем функции аутентификации из auth
+from auth import get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+# Импортируем глобальные переменные модели из main
+import main  # целиком, чтобы избежать цикла
 
 router = APIRouter(prefix="/api")
 
-# --- Вспомогательные функции ---
-def get_popular_tracks(db: Session, limit: int = 20):
-    return db.query(Track).order_by(Track.popularity.desc()).limit(limit).all()
-
-# --- Эндпоинты аутентификации ---
+# === Аутентификация ===
 @router.post("/auth/login")
 async def api_login(
     response: Response,
@@ -28,14 +25,13 @@ async def api_login(
 ):
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.verify_password(password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    # Возвращаем токен и устанавливаем HttpOnly cookie
     response.set_cookie(key="access_token", value=access_token, httponly=True, max_age=ACCESS_TOKEN_EXPIRE_MINUTES*60)
-    return {"status": "ok", "access_token": access_token}  # можно вернуть токен для сохранения на клиенте
+    return {"status": "ok", "access_token": access_token}
 
 @router.post("/auth/register")
 async def api_register(
@@ -50,23 +46,17 @@ async def api_register(
         (User.username == username) | (User.email == email)
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Username or email already taken")
+        raise HTTPException(status_code=400, detail="Имя или email уже заняты")
     hashed = User.hash_password(password)
-    user = User(
-        username=username,
-        email=email,
-        hashed_password=hashed,
-        full_name=full_name
-    )
+    user = User(username=username, email=email, hashed_password=hashed, full_name=full_name)
     db.add(user)
     db.commit()
-    # Сразу логиним
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     response.set_cookie(key="access_token", value=access_token, httponly=True, max_age=ACCESS_TOKEN_EXPIRE_MINUTES*60)
-    return {"status": "ok", "access_token": access_token}
+    return {"status": "ok"}
 
 @router.post("/auth/logout")
 async def api_logout(response: Response):
@@ -77,35 +67,41 @@ async def api_logout(response: Response):
 async def api_me(request: Request, db: Session = Depends(get_db)):
     user = await get_current_user(request, db)
     if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    liked_count = db.query(Interaction).filter(
+        Interaction.user_id == user.id, Interaction.event_type == 'like'
+    ).count()
     return {
         "id": user.id,
         "username": user.username,
         "email": user.email,
-        "full_name": user.full_name
+        "full_name": user.full_name,
+        "liked_count": liked_count,
+        "interactions_count": len(user.interactions)
     }
 
-# --- Эндпоинты для треков и рекомендаций ---
+# === Треки и рекомендации ===
+def get_popular_tracks(db: Session, limit: int = 20):
+    return db.query(Track).order_by(Track.popularity.desc()).limit(limit).all()
+
 @router.get("/recommendations")
 async def api_recommendations(request: Request, limit: int = 20, db: Session = Depends(get_db)):
     user = await get_current_user(request, db)
     user_id = user.id if user else None
-    if user_id and als_model is not None and user_id in user_map:
-        user_idx = user_map[user_id]
-        rec_ids_idx, scores = als_model.recommend(
+    if user_id and main.als_model is not None and user_id in main.user_map:
+        user_idx = main.user_map[user_id]
+        rec_ids_idx, scores = main.als_model.recommend(
             user_idx,
-            user_item_matrix[user_idx],
+            main.user_item_matrix[user_idx],
             N=limit,
             filter_already_liked_items=True
         )
-        track_ids = [idx_to_track[i] for i in rec_ids_idx]
+        track_ids = [main.idx_to_track[i] for i in rec_ids_idx]
         tracks = db.query(Track).filter(Track.id.in_(track_ids)).all()
-        # Сортируем в порядке от модели
         order = {tid: pos for pos, tid in enumerate(track_ids)}
         tracks.sort(key=lambda t: order[t.id])
     else:
         tracks = get_popular_tracks(db, limit)
-    # Преобразуем в список словарей
     result = []
     for t in tracks:
         result.append({
@@ -154,7 +150,7 @@ async def api_tracks(
 async def api_track_detail(track_id: int, db: Session = Depends(get_db)):
     track = db.query(Track).filter(Track.id == track_id).first()
     if not track:
-        raise HTTPException(status_code=404, detail="Track not found")
+        raise HTTPException(status_code=404)
     return {
         "id": track.id,
         "title": track.title,
@@ -176,7 +172,7 @@ async def api_track_play(track_id: int, db: Session = Depends(get_db)):
         "audio_url": "/static/placeholder.mp3"
     }
 
-# --- Исполнители ---
+# === Исполнители ===
 @router.get("/artists/{artist_id}")
 async def api_artist_detail(artist_id: int, db: Session = Depends(get_db)):
     artist = db.query(Artist).filter(Artist.id == artist_id).first()
@@ -207,7 +203,7 @@ async def api_artist_tracks(artist_id: int, db: Session = Depends(get_db)):
         })
     return result
 
-# --- Поиск ---
+# === Поиск ===
 @router.get("/search")
 async def api_search(q: str, db: Session = Depends(get_db)):
     tracks = db.query(Track).filter(Track.title.ilike(f"%{q}%")).all()
@@ -217,7 +213,7 @@ async def api_search(q: str, db: Session = Depends(get_db)):
         "artists": [{"id": a.id, "name": a.name} for a in artists]
     }
 
-# --- Взаимодействия ---
+# === Взаимодействия ===
 @router.post("/interactions")
 async def api_interaction(
     request: Request,
@@ -228,27 +224,21 @@ async def api_interaction(
     user = await get_current_user(request, db)
     if not user:
         raise HTTPException(status_code=401)
-    weight_map = {'play': 1.0, 'skip': 0.5, 'dislike': 0.2, 'like': 2.0}
-    weight = weight_map.get(event_type, 0.0)
-    interaction = Interaction(
-        user_id=user.id,
-        track_id=track_id,
-        event_type=event_type,
-        weight=weight
-    )
+    weights = {'play': 1.0, 'skip': 0.5, 'dislike': 0.2, 'like': 2.0}
+    weight = weights.get(event_type, 0.0)
+    interaction = Interaction(user_id=user.id, track_id=track_id, event_type=event_type, weight=weight)
     db.add(interaction)
     db.commit()
     return {"status": "ok"}
 
-# --- Лайки ---
+# === Лайки ===
 @router.get("/liked")
 async def api_liked(request: Request, db: Session = Depends(get_db)):
     user = await get_current_user(request, db)
     if not user:
         raise HTTPException(status_code=401)
     liked = db.query(Interaction).filter(
-        Interaction.user_id == user.id,
-        Interaction.event_type == 'like'
+        Interaction.user_id == user.id, Interaction.event_type == 'like'
     ).all()
     track_ids = [l.track_id for l in liked]
     tracks = db.query(Track).filter(Track.id.in_(track_ids)).all() if track_ids else []
@@ -268,9 +258,7 @@ async def api_check_like(track_id: int, request: Request, db: Session = Depends(
     if not user:
         return {"liked": False}
     liked = db.query(Interaction).filter(
-        Interaction.user_id == user.id,
-        Interaction.track_id == track_id,
-        Interaction.event_type == 'like'
+        Interaction.user_id == user.id, Interaction.track_id == track_id, Interaction.event_type == 'like'
     ).first()
     return {"liked": liked is not None}
 
@@ -280,14 +268,10 @@ async def api_toggle_like(track_id: int, request: Request, db: Session = Depends
     if not user:
         raise HTTPException(status_code=401)
     existing = db.query(Interaction).filter(
-        Interaction.user_id == user.id,
-        Interaction.track_id == track_id,
-        Interaction.event_type == 'like'
+        Interaction.user_id == user.id, Interaction.track_id == track_id, Interaction.event_type == 'like'
     ).first()
-    # Находим плейлист "Мне нравится"
     liked_playlist = db.query(Playlist).filter(
-        Playlist.user_id == user.id,
-        Playlist.name == "Мне нравится"
+        Playlist.user_id == user.id, Playlist.name == "Мне нравится"
     ).first()
     if not liked_playlist:
         liked_playlist = Playlist(name="Мне нравится", user_id=user.id)
@@ -296,10 +280,8 @@ async def api_toggle_like(track_id: int, request: Request, db: Session = Depends
         db.refresh(liked_playlist)
     if existing:
         db.delete(existing)
-        # Удаляем из плейлиста
         pt = db.query(PlaylistTrack).filter(
-            PlaylistTrack.playlist_id == liked_playlist.id,
-            PlaylistTrack.track_id == track_id
+            PlaylistTrack.playlist_id == liked_playlist.id, PlaylistTrack.track_id == track_id
         ).first()
         if pt:
             db.delete(pt)
@@ -313,7 +295,7 @@ async def api_toggle_like(track_id: int, request: Request, db: Session = Depends
         db.commit()
         return {"status": "liked"}
 
-# --- Плейлисты ---
+# === Плейлисты ===
 @router.get("/playlists")
 async def api_playlists(request: Request, db: Session = Depends(get_db)):
     user = await get_current_user(request, db)
@@ -321,12 +303,8 @@ async def api_playlists(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401)
     playlists = db.query(Playlist).filter(Playlist.user_id == user.id).all()
     return [
-        {
-            "id": p.id,
-            "name": p.name,
-            "created_at": p.created_at,
-            "track_count": len(p.tracks)
-        } for p in playlists
+        {"id": p.id, "name": p.name, "created_at": p.created_at, "track_count": len(p.tracks)}
+        for p in playlists
     ]
 
 @router.get("/playlists/{playlist_id}")
@@ -348,7 +326,8 @@ async def api_playlist_detail(playlist_id: int, request: Request, db: Session = 
                 "title": t.title,
                 "artist": {"id": t.artist.id, "name": t.artist.name} if t.artist else None,
                 "duration": t.duration
-            } for t in tracks
+            }
+            for t in tracks
         ]
     }
 
@@ -365,10 +344,7 @@ async def api_create_playlist(request: Request, name: str = Form(...), db: Sessi
 
 @router.post("/playlists/{playlist_id}/tracks")
 async def api_add_track_to_playlist(
-    playlist_id: int,
-    request: Request,
-    track_id: int = Form(...),
-    db: Session = Depends(get_db)
+    playlist_id: int, request: Request, track_id: int = Form(...), db: Session = Depends(get_db)
 ):
     user = await get_current_user(request, db)
     if not user:
@@ -376,10 +352,8 @@ async def api_add_track_to_playlist(
     playlist = db.query(Playlist).filter(Playlist.id == playlist_id, Playlist.user_id == user.id).first()
     if not playlist:
         raise HTTPException(status_code=404)
-    # Проверяем, нет ли уже
     existing = db.query(PlaylistTrack).filter(
-        PlaylistTrack.playlist_id == playlist_id,
-        PlaylistTrack.track_id == track_id
+        PlaylistTrack.playlist_id == playlist_id, PlaylistTrack.track_id == track_id
     ).first()
     if not existing:
         pt = PlaylistTrack(playlist_id=playlist_id, track_id=track_id)
@@ -389,10 +363,7 @@ async def api_add_track_to_playlist(
 
 @router.delete("/playlists/{playlist_id}/tracks/{track_id}")
 async def api_remove_track_from_playlist(
-    playlist_id: int,
-    track_id: int,
-    request: Request,
-    db: Session = Depends(get_db)
+    playlist_id: int, track_id: int, request: Request, db: Session = Depends(get_db)
 ):
     user = await get_current_user(request, db)
     if not user:
@@ -401,8 +372,7 @@ async def api_remove_track_from_playlist(
     if not playlist:
         raise HTTPException(status_code=404)
     pt = db.query(PlaylistTrack).filter(
-        PlaylistTrack.playlist_id == playlist_id,
-        PlaylistTrack.track_id == track_id
+        PlaylistTrack.playlist_id == playlist_id, PlaylistTrack.track_id == track_id
     ).first()
     if pt:
         db.delete(pt)
@@ -418,7 +388,7 @@ async def api_delete_playlist(playlist_id: int, request: Request, db: Session = 
     if not playlist:
         raise HTTPException(status_code=404)
     if playlist.name == "Мне нравится":
-        raise HTTPException(status_code=400, detail="Cannot delete Liked playlist")
+        raise HTTPException(status_code=400, detail="Нельзя удалить плейлист «Мне нравится»")
     db.delete(playlist)
     db.commit()
     return {"status": "ok"}
