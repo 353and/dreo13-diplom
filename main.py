@@ -14,9 +14,8 @@ import implicit
 import threading
 import os
 
-# Импорты из наших модулей
 from database import SessionLocal, engine, get_db
-from database import Artist, Track, User, Interaction
+from database import Artist, Track, User, Interaction, Playlist, PlaylistTrack
 
 # ===== НАСТРОЙКИ JWT =====
 SECRET_KEY = "your-secret-key-change-in-production"
@@ -26,7 +25,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 app = FastAPI(title="Music Recommender Service")
 
-# Подключаем статику и шаблоны
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -40,19 +38,16 @@ idx_to_track = {}
 user_item_matrix = None
 
 def load_model():
-    """Загружает ALS модель и маппинги из файлов"""
     global als_model, user_map, track_map, user_ids_list, track_ids_list, idx_to_track, user_item_matrix
     try:
         with open('als_model.pkl', 'rb') as f:
             als_model = pickle.load(f)
-
         with open('mappings.pkl', 'rb') as f:
             mappings = pickle.load(f)
             user_map = mappings['user_map']
             track_map = mappings['track_map']
             user_ids_list = mappings['user_ids']
             track_ids_list = mappings['track_ids']
-
         idx_to_track = {v: k for k, v in track_map.items()}
         user_item_matrix = load_npz('user_item_matrix.npz')
         print("✅ Модель ALS успешно загружена")
@@ -60,12 +55,9 @@ def load_model():
         print(f"⚠️ Не удалось загрузить модель: {e}")
         print("Будет использован режим холодного старта (популярные треки)")
 
-# Загружаем модель при старте
 load_model()
 
-# --- Вспомогательные функции ---
 def get_popular_tracks(db: Session, limit: int = 20):
-    """Возвращает популярные треки (по полю popularity)"""
     return db.query(Track).order_by(Track.popularity.desc()).limit(limit).all()
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -152,7 +144,6 @@ async def register(
     )
     db.add(user)
     db.commit()
-    # Сразу логиним
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
@@ -169,7 +160,7 @@ def logout():
 
 # --- Основные эндпоинты ---
 @app.get("/")
-async def home(request: Request, db: Session = Depends(get_db)):
+async def home(request: Request, genre: str = "", db: Session = Depends(get_db)):
     current_user = await get_current_user(request, db)
     user_id = current_user.id if current_user else None
 
@@ -188,26 +179,43 @@ async def home(request: Request, db: Session = Depends(get_db)):
     else:
         recs = get_popular_tracks(db, 20)
 
-    # Получаем ID лайкнутых треков для текущего пользователя
+    # Фильтрация по жанру (если передано)
+    if genre:
+        recs = [t for t in recs if t.genre and t.genre.lower() == genre.lower()]
+
     liked_ids = []
+    liked_count = 0
     if current_user:
         liked = db.query(Interaction).filter(
             Interaction.user_id == current_user.id,
             Interaction.event_type == 'like'
         ).all()
         liked_ids = [l.track_id for l in liked]
+        liked_count = len(liked)
 
     return templates.TemplateResponse("index.html", {
         "request": request,
         "recommendations": recs,
         "user": current_user,
-        "liked_ids": liked_ids
+        "liked_ids": liked_ids,
+        "liked_count": liked_count,
+        "current_genre": genre
     })
 
 @app.get("/library")
-async def library(request: Request, db: Session = Depends(get_db)):
+async def library(request: Request, genre: str = "", sort: str = "popularity", db: Session = Depends(get_db)):
     current_user = await get_current_user(request, db)
-    tracks = db.query(Track).all()
+    query = db.query(Track)
+    if genre:
+        query = query.filter(Track.genre.ilike(f"%{genre}%"))
+    if sort == "popularity":
+        query = query.order_by(Track.popularity.desc())
+    elif sort == "date":
+        query = query.order_by(Track.id.desc())
+    elif sort == "genre":
+        query = query.order_by(Track.genre)
+    tracks = query.all()
+
     liked_ids = []
     if current_user:
         liked = db.query(Interaction).filter(
@@ -215,11 +223,19 @@ async def library(request: Request, db: Session = Depends(get_db)):
             Interaction.event_type == 'like'
         ).all()
         liked_ids = [l.track_id for l in liked]
+
+    genres = set(t.genre for t in tracks if t.genre)
+    artists = set(t.artist_id for t in tracks)
+
     return templates.TemplateResponse("library.html", {
         "request": request,
         "tracks": tracks,
         "user": current_user,
-        "liked_ids": liked_ids
+        "liked_ids": liked_ids,
+        "genre_count": len(genres),
+        "artist_count": len(artists),
+        "current_genre": genre,
+        "current_sort": sort
     })
 
 @app.get("/artist/{artist_id}")
@@ -276,10 +292,9 @@ async def liked_page(request: Request, db: Session = Depends(get_db)):
         Interaction.user_id == current_user.id,
         Interaction.event_type == 'like'
     ).all()
-    # Получаем треки
     track_ids = [l.track_id for l in liked]
     tracks = db.query(Track).filter(Track.id.in_(track_ids)).all() if track_ids else []
-    liked_ids = track_ids  # для подсветки
+    liked_ids = track_ids
     return templates.TemplateResponse("liked.html", {
         "request": request,
         "tracks": tracks,
@@ -297,31 +312,43 @@ async def toggle_like(
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Проверяем, есть ли уже лайк
     existing = db.query(Interaction).filter(
         Interaction.user_id == current_user.id,
         Interaction.track_id == track_id,
         Interaction.event_type == 'like'
     ).first()
 
+    # Находим или создаём плейлист "Мне нравится"
+    liked_playlist = db.query(Playlist).filter(
+        Playlist.user_id == current_user.id,
+        Playlist.name == "Мне нравится"
+    ).first()
+    if not liked_playlist:
+        liked_playlist = Playlist(name="Мне нравится", user_id=current_user.id)
+        db.add(liked_playlist)
+        db.commit()
+        db.refresh(liked_playlist)
+
     if existing:
-        # Удаляем лайк
         db.delete(existing)
+        # Удаляем из плейлиста
+        pt = db.query(PlaylistTrack).filter(
+            PlaylistTrack.playlist_id == liked_playlist.id,
+            PlaylistTrack.track_id == track_id
+        ).first()
+        if pt:
+            db.delete(pt)
         db.commit()
         return JSONResponse({"status": "unliked"})
     else:
-        # Добавляем лайк (с весом 2.0)
-        like = Interaction(
-            user_id=current_user.id,
-            track_id=track_id,
-            event_type='like',
-            weight=2.0
-        )
+        like = Interaction(user_id=current_user.id, track_id=track_id, event_type='like', weight=2.0)
         db.add(like)
+        # Добавляем в плейлист
+        pt = PlaylistTrack(playlist_id=liked_playlist.id, track_id=track_id)
+        db.add(pt)
         db.commit()
         return JSONResponse({"status": "liked"})
 
-# Существующий эндпоинт взаимодействий оставляем для других типов (play, skip, dislike)
 @app.post("/interaction")
 async def interaction(
     request: Request,
@@ -364,7 +391,170 @@ async def play_track(track_id: int, db: Session = Depends(get_db)):
         "audio_url": "/static/placeholder.mp3"
     }
 
-# --- Админский эндпоинт для переобучения модели ---
+@app.get("/track-info/{track_id}")
+async def track_info(track_id: int, db: Session = Depends(get_db)):
+    track = db.query(Track).filter(Track.id == track_id).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    return {
+        "id": track.id,
+        "title": track.title,
+        "artist": track.artist.name if track.artist else "Unknown"
+    }
+
+@app.get("/check-like/{track_id}")
+async def check_like(track_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        return {"liked": False}
+    liked = db.query(Interaction).filter(
+        Interaction.user_id == current_user.id,
+        Interaction.track_id == track_id,
+        Interaction.event_type == 'like'
+    ).first()
+    return {"liked": liked is not None}
+
+# --- Эндпоинты для плейлистов ---
+@app.get("/collection")
+async def collection_page(request: Request, db: Session = Depends(get_db)):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login")
+    
+    playlists = db.query(Playlist).filter(Playlist.user_id == current_user.id).all()
+    
+    # Убеждаемся, что плейлист "Мне нравится" существует
+    liked_playlist = db.query(Playlist).filter(
+        Playlist.user_id == current_user.id,
+        Playlist.name == "Мне нравится"
+    ).first()
+    if not liked_playlist:
+        liked_playlist = Playlist(name="Мне нравится", user_id=current_user.id)
+        db.add(liked_playlist)
+        db.commit()
+        db.refresh(liked_playlist)
+        playlists.append(liked_playlist)
+    
+    return templates.TemplateResponse("collection.html", {
+        "request": request,
+        "user": current_user,
+        "playlists": playlists
+    })
+
+@app.get("/playlist/{playlist_id}")
+async def playlist_page(request: Request, playlist_id: int, db: Session = Depends(get_db)):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login")
+    
+    playlist = db.query(Playlist).filter(Playlist.id == playlist_id, Playlist.user_id == current_user.id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    
+    tracks = [pt.track for pt in playlist.tracks]
+    
+    liked = db.query(Interaction).filter(
+        Interaction.user_id == current_user.id,
+        Interaction.event_type == 'like'
+    ).all()
+    liked_ids = [l.track_id for l in liked]
+    
+    return templates.TemplateResponse("playlist.html", {
+        "request": request,
+        "user": current_user,
+        "playlist": playlist,
+        "tracks": tracks,
+        "liked_ids": liked_ids
+    })
+
+@app.post("/playlist/create")
+async def create_playlist(
+    request: Request,
+    name: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    playlist = Playlist(name=name, user_id=current_user.id)
+    db.add(playlist)
+    db.commit()
+    return RedirectResponse(url="/collection", status_code=302)
+
+@app.post("/playlist/{playlist_id}/add-track")
+async def add_track_to_playlist(
+    playlist_id: int,
+    track_id: int = Form(...),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    playlist = db.query(Playlist).filter(Playlist.id == playlist_id, Playlist.user_id == current_user.id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    
+    existing = db.query(PlaylistTrack).filter(
+        PlaylistTrack.playlist_id == playlist_id,
+        PlaylistTrack.track_id == track_id
+    ).first()
+    if not existing:
+        pt = PlaylistTrack(playlist_id=playlist_id, track_id=track_id)
+        db.add(pt)
+        db.commit()
+    
+    return RedirectResponse(url=f"/playlist/{playlist_id}", status_code=302)
+
+@app.post("/playlist/{playlist_id}/remove-track")
+async def remove_track_from_playlist(
+    playlist_id: int,
+    track_id: int = Form(...),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    playlist = db.query(Playlist).filter(Playlist.id == playlist_id, Playlist.user_id == current_user.id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    
+    pt = db.query(PlaylistTrack).filter(
+        PlaylistTrack.playlist_id == playlist_id,
+        PlaylistTrack.track_id == track_id
+    ).first()
+    if pt:
+        db.delete(pt)
+        db.commit()
+    
+    return RedirectResponse(url=f"/playlist/{playlist_id}", status_code=302)
+
+@app.post("/playlist/{playlist_id}/delete")
+async def delete_playlist(
+    playlist_id: int,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    current_user = await get_current_user(request, db)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    playlist = db.query(Playlist).filter(Playlist.id == playlist_id, Playlist.user_id == current_user.id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    
+    if playlist.name == "Мне нравится":
+        raise HTTPException(status_code=400, detail="Cannot delete Liked playlist")
+    
+    db.delete(playlist)
+    db.commit()
+    return RedirectResponse(url="/collection", status_code=302)
+
+# --- Админский эндпоинт ---
 def retrain_model_task():
     db = SessionLocal()
     try:
@@ -431,3 +621,44 @@ async def admin_retrain(request: Request, db: Session = Depends(get_db)):
 @app.get("/health")
 def health():
     return {"status": "ok", "model_loaded": als_model is not None}
+
+from api import router as api_router
+app.include_router(api_router)
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # для разработки; в продакшене лучше указать конкретный домен
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Папка со статикой фронтенда
+SPA_DIR = "static_frontend"
+
+# Если папка существует, настраиваем раздачу SPA
+if os.path.exists(SPA_DIR):
+    # Монтируем папку assets для статических ресурсов (CSS, JS, изображения)
+    assets_path = os.path.join(SPA_DIR, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+    # Обрабатываем все остальные пути (кроме /api) и отдаём index.html
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Если запрос начинается с /api, пропускаем (такие пути уже обработаны)
+        if full_path.startswith("api/"):
+            # на всякий случай отдаём index.html – React Router сам разберётся
+            pass
+        index_path = os.path.join(SPA_DIR, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"error": "SPA index not found"}
+else:
+    print("⚠️ SPA directory not found. Frontend will not be served.")

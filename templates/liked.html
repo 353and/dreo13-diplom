@@ -1,52 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Мне нравится{% endblock %}
-{% block hero %}
-<div class="hero">
-    <div class="container text-center">
-        <h1 class="display-4"><i class="fas fa-heart me-3"></i>Мне нравится</h1>
-        <p class="lead">Ваши любимые треки</p>
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+    <div style="width: 200px; height: 200px; background: linear-gradient(135deg, var(--accent) 0%, #8e2f4b 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 2rem;">
+        <i class="fas fa-heart" style="font-size: 5rem; color: white;"></i>
+    </div>
+    <div>
+        <h1 class="display-4 mb-0">Мне нравится</h1>
+        <p class="text-secondary mt-2">{{ tracks|length }} треков</p>
     </div>
 </div>
-{% endblock %}
-{% block content %}
-{% if tracks %}
+
 <div class="row">
     {% for track in tracks %}
     <div class="col-md-6 col-lg-4 mb-4">
-        <div class="card track-card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center mb-3">
-                    <img src="https://ui-avatars.com/api/?name={{ track.artist.name if track.artist else 'Unknown' }}&size=40&background=random&length=1" class="artist-avatar me-2">
-                    <div class="flex-grow-1">
-                        <h5 class="card-title mb-0">{{ track.title }}</h5>
-                        <p class="text-muted mb-0">
-                            {% if track.artist %}
-                                <a href="/artist/{{ track.artist.id }}" class="text-decoration-none">{{ track.artist.name }}</a>
-                            {% else %}
-                                Unknown
-                            {% endif %}
-                        </p>
-                    </div>
-                    <i class="fas fa-heart liked fa-2x like-button" id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
-                </div>
-                <p class="card-text">
-                    <span class="badge bg-info me-1">{{ track.genre }}</span>
-                    <span class="badge bg-secondary">{{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}</span>
-                </p>
-                <button class="btn btn-primary w-100" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ track.artist.name if track.artist else '' }}', '{{ track.artist.name if track.artist else '' }}')">
-                    <i class="fas fa-play me-2"></i>Слушать
-                </button>
+        <div class="track-card" onclick="playTrack({{ track.id }}, '{{ track.title|escape }}', '{{ track.artist.name|escape if track.artist else '' }}', [{% for t in tracks %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}])">
+            <img src="https://ui-avatars.com/api/?name={{ track.artist.name if track.artist else 'Unknown' }}&size=200&background=random&length=1" class="cover-art">
+            <div class="track-title">{{ track.title if track.title else 'Без названия' }}</div>
+            <div class="track-artist">{{ track.artist.name if track.artist else 'Неизвестный исполнитель' }}</div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <span class="track-duration">
+                    {% if track.duration %}
+                        {{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}
+                    {% else %}
+                        0:00
+                    {% endif %}
+                </span>
+                <i class="fas fa-heart liked like-button" onclick="toggleLike({{ track.id }}, event)"></i>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
-{% else %}
-<div class="alert alert-info text-center py-5">
-    <i class="fas fa-heart fa-3x mb-3"></i>
-    <h4>У вас пока нет любимых треков</h4>
-    <p>Отмечайте понравившиеся треки сердечком, и они появятся здесь</p>
-    <a href="/" class="btn btn-primary mt-3">На главную</a>
+
+{% if not tracks %}
+<div class="text-center py-5">
+    <i class="fas fa-heart fa-4x mb-3" style="color: var(--text-muted);"></i>
+    <h3>У вас пока нет любимых треков</h3>
+    <p class="text-secondary">Отмечайте понравившиеся треки сердечком, и они появятся здесь</p>
 </div>
 {% endif %}
 {% endblock %}

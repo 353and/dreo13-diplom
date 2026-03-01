@@ -1,49 +1,104 @@
 {% extends "base.html" %}
 {% block title %}Главная - Рекомендации{% endblock %}
 {% block hero %}
-<div class="hero">
-    <div class="container text-center">
-        <h1 class="display-4"><i class="fas fa-magic me-3"></i>Персональные рекомендации</h1>
-        <p class="lead">Откройте для себя новую музыку на основе ваших предпочтений</p>
+<!-- Раздел "Моя волна" -->
+<div class="hero-wave">
+    <div class="container">
+        <h1>Моя волна</h1>
+        <p>Персональные рекомендации на основе ваших предпочтений</p>
+        <button class="btn-play" onclick="playFirstTrack()">
+            <i class="fas fa-play me-2"></i>Слушать
+        </button>
     </div>
 </div>
 {% endblock %}
 {% block content %}
-<div class="row">
+<!-- Статистика -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ user.interactions|length if user else 0 }}</div>
+        <div class="stat-label">Прослушано треков</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ liked_count if liked_count else 0 }}</div>
+        <div class="stat-label">Мне нравится</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ recommendations|length if recommendations else 0 }}</div>
+        <div class="stat-label">Рекомендаций</div>
+    </div>
+</div>
+
+<!-- Для вас (персональные рекомендации) -->
+<h2 class="mb-4">Для вас</h2>
+<div class="horizontal-scroll">
     {% for track in recommendations %}
-    <div class="col-md-6 col-lg-4 mb-4">
-        <div class="card track-card h-100">
-            <div class="card-body">
-                <div class="d-flex align-items-center mb-3">
-                    <img src="https://ui-avatars.com/api/?name={{ track.artist.name if track.artist else 'Unknown' }}&size=40&background=random&length=1" class="artist-avatar me-2" alt="{{ track.artist.name if track.artist else 'Unknown' }}">
-                    <div class="flex-grow-1">
-                        <h5 class="card-title mb-0">{{ track.title }}</h5>
-                        <p class="text-muted mb-0">
-                            {% if track.artist %}
-                                <a href="/artist/{{ track.artist.id }}" class="text-decoration-none">{{ track.artist.name }}</a>
-                            {% else %}
-                                Unknown
-                            {% endif %}
-                        </p>
-                    </div>
-                    {% if user %}
-                        {% if track.id in liked_ids %}
-                            <i class="fas fa-heart liked fa-2x like-button" id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
-                        {% else %}
-                            <i class="far fa-heart fa-2x like-button" id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
-                        {% endif %}
-                    {% endif %}
-                </div>
-                <p class="card-text">
-                    <span class="badge bg-info me-1">{{ track.genre }}</span>
-                    <span class="badge bg-secondary">{{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}</span>
-                </p>
-                <button class="btn btn-primary w-100 py-2" onclick="playTrack({{ track.id }}, '{{ track.title }}', '{{ track.artist.name if track.artist else '' }}', '{{ track.artist.name if track.artist else '' }}')">
-                    <i class="fas fa-play me-2"></i>Слушать
-                </button>
-            </div>
+    <div class="track-card" onclick="playTrack({{ track.id }}, '{{ track.title|escape }}', '{{ track.artist.name|escape if track.artist else '' }}', [{% for t in recommendations %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}])">
+        <img src="https://ui-avatars.com/api/?name={{ track.artist.name if track.artist else 'Unknown' }}&size=200&background=random&length=1" class="cover-art">
+        <div class="track-title">{{ track.title if track.title else 'Без названия' }}</div>
+        <div class="track-artist">{{ track.artist.name if track.artist else 'Неизвестный исполнитель' }}</div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <span class="track-duration">
+                {% if track.duration %}
+                    {{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}
+                {% else %}
+                    0:00
+                {% endif %}
+            </span>
+            {% if user %}
+                <i class="{% if track.id in liked_ids %}fas liked{% else %}far{% endif %} fa-heart like-button" 
+                   id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
+            {% endif %}
         </div>
     </div>
     {% endfor %}
 </div>
+
+<!-- Тренды (популярные треки) -->
+<h2 class="mb-4 mt-5">Тренды</h2>
+<div class="horizontal-scroll">
+    {% for track in recommendations|slice(5) %}
+    <div class="track-card" onclick="playTrack({{ track.id }}, '{{ track.title|escape }}', '{{ track.artist.name|escape if track.artist else '' }}', [{% for t in recommendations %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}])">
+        <img src="https://ui-avatars.com/api/?name={{ track.artist.name if track.artist else 'Unknown' }}&size=200&background=random&length=1" class="cover-art">
+        <div class="track-title">{{ track.title if track.title else 'Без названия' }}</div>
+        <div class="track-artist">{{ track.artist.name if track.artist else 'Неизвестный исполнитель' }}</div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <span class="track-duration">
+                {% if track.duration %}
+                    {{ (track.duration // 60) }}:{{ '%02d' % (track.duration % 60) }}
+                {% else %}
+                    0:00
+                {% endif %}
+            </span>
+            {% if user %}
+                <i class="{% if track.id in liked_ids %}fas liked{% else %}far{% endif %} fa-heart like-button" 
+                   id="heart-{{ track.id }}" onclick="toggleLike({{ track.id }}, event)"></i>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Чипы жанров (фильтрация) -->
+<div class="chip-container mt-5">
+    <a href="/?genre=" class="chip {% if not current_genre %}active{% endif %}">Все</a>
+    <a href="/?genre=Rock" class="chip {% if current_genre == 'Rock' %}active{% endif %}">Рок</a>
+    <a href="/?genre=Pop" class="chip {% if current_genre == 'Pop' %}active{% endif %}">Поп</a>
+    <a href="/?genre=Electronic" class="chip {% if current_genre == 'Electronic' %}active{% endif %}">Электроника</a>
+    <a href="/?genre=Hip-Hop" class="chip {% if current_genre == 'Hip-Hop' %}active{% endif %}">Хип-хоп</a>
+    <a href="/?genre=Jazz" class="chip {% if current_genre == 'Jazz' %}active{% endif %}">Джаз</a>
+    <a href="/?genre=Classical" class="chip {% if current_genre == 'Classical' %}active{% endif %}">Классика</a>
+</div>
+
+<script>
+function playFirstTrack() {
+    {% if recommendations %}
+        const firstId = {{ recommendations[0].id }};
+        const firstTitle = '{{ recommendations[0].title|escape }}';
+        const firstArtist = '{{ recommendations[0].artist.name|escape if recommendations[0].artist else '' }}';
+        const playlist = [{% for t in recommendations %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+        playTrack(firstId, firstTitle, firstArtist, playlist);
+    {% endif %}
+}
+</script>
 {% endblock %}

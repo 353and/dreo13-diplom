@@ -36,6 +36,7 @@ class Track(Base):
     popularity = Column(Integer, default=0)
     artist = relationship("Artist", back_populates="tracks")
     interactions = relationship("Interaction", back_populates="track")
+    playlist_tracks = relationship("PlaylistTrack", back_populates="track")
 
 class User(Base):
     __tablename__ = "users"
@@ -47,19 +48,17 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     interactions = relationship("Interaction", back_populates="user")
+    playlists = relationship("Playlist", back_populates="user", cascade="all, delete-orphan")
 
     def verify_password(self, password: str) -> bool:
-        """Проверяет пароль: hashed_password хранит соль и хеш в формате "salt$hash"."""
         if not self.hashed_password or '$' not in self.hashed_password:
             return False
         salt, hash_val = self.hashed_password.split('$', 1)
-        # Вычисляем хеш введённого пароля с той же солью
         test_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
         return test_hash == hash_val
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """Создаёт соль и хеш для пароля. Возвращает строку "salt$hash"."""
         salt = os.urandom(16).hex()
         hash_val = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
         return f"{salt}${hash_val}"
@@ -75,7 +74,26 @@ class Interaction(Base):
     user = relationship("User", back_populates="interactions")
     track = relationship("Track", back_populates="interactions")
 
-# Дополнительные индексы
+class Playlist(Base):
+    __tablename__ = "playlists"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    user = relationship("User", back_populates="playlists")
+    tracks = relationship("PlaylistTrack", back_populates="playlist", cascade="all, delete-orphan")
+
+class PlaylistTrack(Base):
+    __tablename__ = "playlist_tracks"
+    id = Column(Integer, primary_key=True, index=True)
+    playlist_id = Column(Integer, ForeignKey("playlists.id"))
+    track_id = Column(Integer, ForeignKey("tracks.id"))
+    added_at = Column(DateTime, default=datetime.datetime.utcnow)
+    playlist = relationship("Playlist", back_populates="tracks")
+    track = relationship("Track", back_populates="playlist_tracks")
+
+# Индексы
 Index('idx_interactions_user', Interaction.user_id)
 Index('idx_interactions_track', Interaction.track_id)
 Index('idx_tracks_artist', Track.artist_id)

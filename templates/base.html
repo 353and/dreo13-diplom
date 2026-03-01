@@ -4,187 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>{% block title %}Music Recommender{% endblock %}</title>
-    <!-- Bootstrap Morph theme (Bootswatch) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/morph/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap (только сетка) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Дополнительные стили -->
-    <style>
-        /* Общие стили */
-        .track-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-            border-radius: 12px;
-            overflow: hidden;
-            height: 100%;
-        }
-        .track-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-        }
-        .artist-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-        .player-bar {
-            position: fixed;
-            bottom: 0;
-            width: 100%;
-            background: var(--bs-body-bg);
-            border-top: 1px solid var(--bs-border-color);
-            padding: 10px 0;
-            box-shadow: 0 -5px 15px rgba(0,0,0,0.1);
-            backdrop-filter: blur(10px);
-            z-index: 1000;
-        }
-        .player-progress {
-            cursor: pointer;
-            height: 5px;
-            background: var(--bs-secondary-bg);
-            border-radius: 5px;
-            margin: 5px 0;
-        }
-        .player-progress-bar {
-            height: 5px;
-            background: var(--bs-primary);
-            border-radius: 5px;
-            width: 0%;
-        }
-        body {
-            margin-bottom: 120px;
-        }
-        .hero {
-            background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-info) 100%);
-            color: white;
-            padding: 3rem 0;
-            margin-bottom: 2rem;
-            border-radius: 0 0 2rem 2rem;
-        }
-        .btn-circle {
-            border-radius: 50px;
-        }
-        .player-time {
-            font-size: 0.85rem;
-            color: var(--bs-secondary-color);
-        }
-        .like-button {
-            cursor: pointer;
-            transition: transform 0.2s;
-            font-size: 1.8rem; /* Увеличим размер сердечка */
-        }
-        .like-button:hover {
-            transform: scale(1.2);
-        }
-        .liked {
-            color: #dc3545;
-        }
-
-        /* Мобильные стили */
-        @media (max-width: 768px) {
-            /* Увеличиваем отступы для навигации */
-            .navbar-nav .nav-link {
-                padding: 0.75rem 1rem;
-                font-size: 1.1rem;
-            }
-            
-            /* Карточки на мобильных */
-            .track-card {
-                margin-bottom: 1rem;
-            }
-            .track-card .btn {
-                padding: 0.75rem;
-                font-size: 1.1rem;
-            }
-            
-            /* Заголовки */
-            h2 {
-                font-size: 1.8rem;
-            }
-            h4 {
-                font-size: 1.4rem;
-            }
-            
-            /* Герой (баннер) */
-            .hero {
-                padding: 2rem 0;
-            }
-            .hero h1 {
-                font-size: 2rem;
-            }
-            .hero p {
-                font-size: 1.1rem;
-            }
-            
-            /* Плеер на мобильных */
-            .player-bar .row {
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-            }
-            .player-bar .col-md-3, .player-bar .col-md-6 {
-                width: 100%;
-                margin-bottom: 8px;
-            }
-            .player-bar .col-md-3.text-end {
-                text-align: center !important;
-            }
-            .player-bar .btn-circle {
-                width: 50px;
-                height: 50px;
-                padding: 0;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.3rem;
-            }
-            #nowPlaying {
-                font-size: 1rem;
-                display: block;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 100%;
-            }
-            
-            /* Аватарка в плеере */
-            .artist-avatar {
-                width: 35px;
-                height: 35px;
-            }
-            
-            /* Отступы для контейнера */
-            .container {
-                padding-left: 15px;
-                padding-right: 15px;
-            }
-        }
-
-        /* Для очень маленьких экранов (до 480px) */
-        @media (max-width: 480px) {
-            .like-button {
-                font-size: 1.6rem;
-            }
-            .card-body {
-                padding: 1rem;
-            }
-            .badge {
-                font-size: 0.8rem;
-                padding: 0.4rem 0.6rem;
-            }
-        }
-    </style>
+    <!-- Наш кастомный стиль (Яндекс Музыка + Apple Music элементы) -->
+    <link href="/static/css/yandex-style.css" rel="stylesheet">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <!-- Верхняя навигация -->
+    <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/"><i class="fas fa-headphones me-2"></i>Music Recommender</a>
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-headphones me-2"></i>Music Recommender
+            </a>
+            
+            <!-- Поиск (центрированный) -->
+            <form class="search-form d-none d-lg-block" action="/search" method="get">
+                <div class="input-group">
+                    <input type="search" class="form-control" name="q" placeholder="Поиск треков, исполнителей" value="{{ query if query else '' }}">
+                </div>
+            </form>
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
+            
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
+                <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">
                             <i class="fas fa-home me-1"></i>Главная
@@ -201,21 +49,20 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <form class="d-flex" action="/search" method="get">
-                            <input class="form-control me-2" type="search" name="q" placeholder="Поиск треков, исполнителей" value="{{ query if query else '' }}">
-                            <button class="btn btn-outline-light" type="submit"><i class="fas fa-search"></i></button>
-                        </form>
+                        <a class="nav-link {% if request.url.path == '/collection' %}active{% endif %}" href="/collection">
+                            <i class="fas fa-list me-1"></i>Моя коллекция
+                        </a>
                     </li>
-                </ul>
-                <ul class="navbar-nav ms-auto">
                     {% if user and user.username == 'admin' %}
                     <li class="nav-item">
-                        <a class="nav-link" href="#" onclick="retrainModel()"><i class="fas fa-sync-alt me-1"></i>Переобучить модель</a>
+                        <a class="nav-link" href="#" onclick="retrainModel()">
+                            <i class="fas fa-sync-alt me-1"></i>Переобучить
+                        </a>
                     </li>
                     {% endif %}
                     {% if user %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
                                 <i class="fas fa-user-circle me-1"></i>{{ user.full_name or user.username }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
@@ -235,6 +82,14 @@
         </div>
     </nav>
 
+    <!-- Поиск на мобильных (отдельно) -->
+    <div class="container d-lg-none mt-3">
+        <form class="search-form w-100" action="/search" method="get">
+            <input type="search" class="form-control" name="q" placeholder="Поиск треков, исполнителей" value="{{ query if query else '' }}">
+        </form>
+    </div>
+
+    <!-- Основной контент -->
     <main>
         {% block hero %}{% endblock %}
         <div class="container mt-4">
@@ -242,30 +97,40 @@
         </div>
     </main>
 
-    <!-- Мини-плеер -->
+    <!-- Плеер в стиле Яндекс.Музыки + Apple Music -->
     <div class="player-bar" id="playerBar" style="display: none;">
         <div class="container">
             <div class="row align-items-center">
-                <div class="col-md-3 d-flex align-items-center">
-                    <img src="" id="nowPlayingAvatar" class="artist-avatar me-2" style="display: none;">
-                    <span id="nowPlaying">Не играет</span>
+                <div class="col-md-3">
+                    <div class="player-info">
+                        <img src="" id="nowPlayingAvatar" class="avatar" style="display: none;">
+                        <div>
+                            <div id="nowPlaying" class="fw-medium">Не играет</div>
+                            <small class="text-secondary" id="nowPlayingArtist"></small>
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="d-flex align-items-center">
-                        <span class="player-time me-2" id="currentTime">0:00</span>
-                        <div class="player-progress flex-grow-1" id="progressContainer" onclick="seek(event)">
+                    <div class="player-controls">
+                        <button onclick="prevTrack()" class="control-btn" title="Предыдущий"><i class="fas fa-step-backward"></i></button>
+                        <button class="play-pause" id="playPauseBtn" onclick="togglePlayPause()"><i class="fas fa-play"></i></button>
+                        <button onclick="nextTrack()" class="control-btn" title="Следующий"><i class="fas fa-step-forward"></i></button>
+                    </div>
+                    <div class="player-progress-container">
+                        <span id="currentTime">0:00</span>
+                        <div class="player-progress" id="progressContainer" onclick="seek(event)">
                             <div class="player-progress-bar" id="progressBar"></div>
                         </div>
-                        <span class="player-time ms-2" id="durationTime">0:00</span>
-                    </div>
-                    <div class="text-center mt-1">
-                        <button class="btn btn-primary btn-circle me-2" id="playPauseBtn" onclick="togglePlayPause()"><i class="fas fa-play"></i></button>
-                        <button class="btn btn-secondary btn-circle" id="skipBtn" onclick="skipTrack()"><i class="fas fa-forward"></i></button>
+                        <span id="durationTime">0:00</span>
                     </div>
                 </div>
                 <div class="col-md-3 text-end">
-                    <button class="btn btn-success btn-circle me-2" onclick="sendFeedback('like')"><i class="fas fa-thumbs-up"></i></button>
-                    <button class="btn btn-danger btn-circle" onclick="sendFeedback('dislike')"><i class="fas fa-thumbs-down"></i></button>
+                    <button class="like-button" id="likeButton" onclick="toggleLikeCurrent()" title="Нравится">
+                        <i class="far fa-heart"></i>
+                    </button>
+                    <button class="dislike-button ms-3" onclick="dislikeTrack()" title="Не нравится (пропустить)">
+                        <i class="fas fa-thumbs-down"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -273,11 +138,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Глобальные переменные плеера
         let currentTrackId = null;
+        let currentTrackTitle = '';
+        let currentTrackArtist = '';
+        let currentPlaylist = [];
+        let currentIndex = -1;
         let audio = new Audio('/static/placeholder.mp3');
         audio.loop = false;
 
-        // Обновление прогресс-бара и времени
         audio.addEventListener('timeupdate', function() {
             if (audio.duration) {
                 const percent = (audio.currentTime / audio.duration) * 100;
@@ -292,16 +161,15 @@
         });
 
         audio.addEventListener('play', function() {
-            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+            document.querySelector('#playPauseBtn i').className = 'fas fa-pause';
         });
 
         audio.addEventListener('pause', function() {
-            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play"></i>';
+            document.querySelector('#playPauseBtn i').className = 'fas fa-play';
         });
 
         audio.addEventListener('ended', function() {
-            document.getElementById('playerBar').style.display = 'none';
-            currentTrackId = null;
+            nextTrack();
         });
 
         function formatTime(seconds) {
@@ -320,13 +188,26 @@
             audio.currentTime = percent * audio.duration;
         }
 
-        async function playTrack(trackId, title, artist, artistName) {
+        async function playTrack(trackId, title, artist, playlist = null) {
+            if (playlist) {
+                currentPlaylist = playlist;
+                currentIndex = playlist.findIndex(id => id == trackId);
+            } else {
+                currentPlaylist = [trackId];
+                currentIndex = 0;
+            }
+
             const trackResponse = await fetch(`/track/${trackId}/play`);
             const trackData = await trackResponse.json();
 
             currentTrackId = trackId;
-            document.getElementById('nowPlaying').innerText = title + ' - ' + artist;
+            currentTrackTitle = title;
+            currentTrackArtist = artist;
+            
+            document.getElementById('nowPlaying').innerText = title;
+            document.getElementById('nowPlayingArtist').innerText = artist;
             document.getElementById('playerBar').style.display = 'block';
+            
             audio.src = trackData.audio_url;
             audio.play();
 
@@ -341,6 +222,78 @@
                     'event_type': 'play'
                 })
             });
+
+            updateLikeButton(trackId);
+        }
+
+        async function updateLikeButton(trackId) {
+            const response = await fetch(`/check-like/${trackId}`);
+            const data = await response.json();
+            const likeBtn = document.getElementById('likeButton').querySelector('i');
+            if (data.liked) {
+                likeBtn.className = 'fas fa-heart liked';
+            } else {
+                likeBtn.className = 'far fa-heart';
+            }
+        }
+
+        async function toggleLikeCurrent() {
+            if (!currentTrackId) return;
+            const response = await fetch('/toggle-like', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({ 'track_id': currentTrackId })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const likeIcon = document.getElementById('likeButton').querySelector('i');
+                if (data.status === 'liked') {
+                    likeIcon.className = 'fas fa-heart liked';
+                } else {
+                    likeIcon.className = 'far fa-heart';
+                }
+            }
+        }
+
+        async function dislikeTrack() {
+            if (!currentTrackId) return;
+            await fetch('/interaction', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({
+                    'track_id': currentTrackId,
+                    'event_type': 'dislike'
+                })
+            });
+            nextTrack();
+        }
+
+        function nextTrack() {
+            if (currentPlaylist.length === 0) return;
+            let nextIndex = currentIndex + 1;
+            if (nextIndex >= currentPlaylist.length) {
+                nextIndex = 0;
+            }
+            const nextId = currentPlaylist[nextIndex];
+            fetch(`/track-info/${nextId}`)
+                .then(res => res.json())
+                .then(track => {
+                    playTrack(nextId, track.title, track.artist, currentPlaylist);
+                });
+        }
+
+        function prevTrack() {
+            if (currentPlaylist.length === 0) return;
+            let prevIndex = currentIndex - 1;
+            if (prevIndex < 0) {
+                prevIndex = currentPlaylist.length - 1;
+            }
+            const prevId = currentPlaylist[prevIndex];
+            fetch(`/track-info/${prevId}`)
+                .then(res => res.json())
+                .then(track => {
+                    playTrack(prevId, track.title, track.artist, currentPlaylist);
+                });
         }
 
         function togglePlayPause() {
@@ -351,39 +304,7 @@
             }
         }
 
-        function skipTrack() {
-            audio.pause();
-            audio.currentTime = 0;
-            if (currentTrackId) {
-                fetch('/interaction', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: new URLSearchParams({
-                        'track_id': currentTrackId,
-                        'event_type': 'skip'
-                    })
-                });
-            }
-            document.getElementById('playerBar').style.display = 'none';
-            currentTrackId = null;
-        }
-
-        async function sendFeedback(type) {
-            if (!currentTrackId) return;
-            const response = await fetch('/interaction', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: new URLSearchParams({
-                    'track_id': currentTrackId,
-                    'event_type': type
-                })
-            });
-            if (response.ok) {
-                alert('Спасибо за отзыв!');
-            }
-        }
-
-        async function toggleLike(trackId, event) {
+        window.toggleLike = async function(trackId, event) {
             if (event) event.stopPropagation();
             const response = await fetch('/toggle-like', {
                 method: 'POST',
@@ -403,7 +324,7 @@
             } else {
                 alert('Ошибка');
             }
-        }
+        };
 
         async function retrainModel() {
             if (!confirm('Запустить переобучение модели? Это может занять несколько секунд.')) return;
